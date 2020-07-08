@@ -27,6 +27,7 @@ type Courses struct {
 func APIServer(w http.ResponseWriter, r *http.Request) {
 
 	byteCh := make(chan []byte)
+	answerCh := make(chan []byte)
 
 	go func() {
 
@@ -44,16 +45,19 @@ func APIServer(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	xmlCourses := &Courses{}
-	err := xml.Unmarshal(<-byteCh, xmlCourses)
 
+	err := xml.Unmarshal(<-byteCh, xmlCourses)
 	if nil != err {
 		log.Println(err)
 	}
 
-	answer, err := json.Marshal(xmlCourses)
-	if err != nil {
-		log.Println(err)
-	}
+	go func() {
+		answer, err := json.Marshal(xmlCourses)
+		if err != nil {
+			log.Println(err)
+		}
+		answerCh <- answer
+	}()
 
-	w.Write(answer)
+	w.Write(<-answerCh)
 }
