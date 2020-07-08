@@ -26,18 +26,26 @@ type Courses struct {
 //APIServer ...
 func APIServer(w http.ResponseWriter, r *http.Request) {
 
-	resp, err := http.Get("https://test.cryptohonest.ru/request-exportxml.xml")
-	if err != nil {
-		log.Fatalln(err)
-	}
+	byteCh := make(chan []byte)
 
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatalln(err)
-	}
+	go func() {
+
+		resp, err := http.Get("https://test.cryptohonest.ru/request-exportxml.xml")
+		if err != nil {
+			log.Fatalln(err)
+		}
+
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			log.Fatalln(err)
+		}
+
+		byteCh <- body
+	}()
 
 	xmlCourses := &Courses{}
-	err = xml.Unmarshal(body, xmlCourses)
+	err := xml.Unmarshal(<-byteCh, xmlCourses)
+
 	if nil != err {
 		log.Println(err)
 	}
