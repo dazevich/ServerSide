@@ -3,7 +3,8 @@ package main
 import (
 	"net/http"
 
-	"./api"
+	"ServerSide/api"
+
 	"github.com/gorilla/mux"
 )
 
