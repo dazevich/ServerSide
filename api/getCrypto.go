@@ -1,101 +1,92 @@
 package api
 
 import (
-	"ServerSide/api/bhx"
-	"encoding/hex"
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 )
 
 type CryptoAnswer struct {
-	Key            string
-	Input          string
-	Output         string
-	DecryptedInput string
+	Key    string
+	Input  string
+	Output string
 }
 
-func Encrypt(input string, key bhx.BoxSharedKey, nonce bhx.BoxNonce) []byte {
+func Encrypt(text string, shift int, size int) string {
+	var encrypted string
+	var old_code, new_code int
+	for _, ch := range text {
+		old_code = int(ch)
+		new_code = old_code + shift
+		if ch >= 'a' && ch <= 'z' && new_code > int('z') ||
+			ch >= 'A' && ch <= 'Z' && new_code > int('Z') {
+			new_code -= size
+		}
 
-	result, err := bhx.Encrypt([]byte(input), key, nonce)
-	if err != nil {
-		log.Fatal(err.Error())
-		return nil
+		encrypted += string(new_code)
 	}
-
-	return result
+	return encrypted
 }
 
-func Decrypt(input []byte, key bhx.BoxSharedKey, nonce bhx.BoxNonce) []byte {
+func Decrypt(text string, shift int, size int) string {
+	var decrypted string
+	var old_code, new_code int
+	for _, ch := range text {
+		old_code = int(ch)
+		new_code = old_code - shift
+		if ch >= 'a' && ch <= 'z' && new_code < int('a') ||
+			ch >= 'A' && ch <= 'Z' && new_code < int('A') {
+			new_code += size
+		}
 
-	result, err := bhx.Decrypt(input, key, nonce)
-	if err != nil {
-		log.Fatal(err.Error())
-		return nil
+		decrypted += string(new_code)
 	}
-
-	return result
+	return decrypted
 }
+
+var (
+	input  string
+	output string
+)
 
 func GetCrypto(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
-	k := r.FormValue("key")
-	in := r.FormValue("input")
-	out := r.FormValue("output")
-
-	var input []byte
-	var output []byte
-	var key bhx.BoxSharedKey
-
-	if k != "" {
-		bytes, err := hex.DecodeString(k)
-		if err != nil {
-			log.Fatal("Error create key: ", err)
-		}
-		copy(key[:], bytes)
-	} else {
-		bytes, err := hex.DecodeString("edeef0")
-		if err != nil {
-			log.Fatal("Error create key: ", err)
-		}
-		copy(key[:], bytes)
-	}
-
-	var nnonce bhx.BoxNonce
-	kh, err := hex.DecodeString("edeef0edeef0edeef0edeef0edeef0edeef0edeef0edeef0")
+	shift, err := strconv.Atoi(r.FormValue("key"))
 	if err != nil {
 		log.Fatal(err)
 	}
-	copy(nnonce[:], kh[:bhx.BoxNonceLen])
+	in := r.FormValue("input")
+	out := r.FormValue("output")
+
+	size := 33
+	if shift > size {
+		log.Fatalf("Cannot be more then %d", shift)
+	}
 
 	if out == "" && in != "" {
-		output = Encrypt(in, key, nnonce)
-		input = []byte(in)
+		output = Encrypt(in, shift, size)
+		input = in
 	}
 
 	if out != "" && in == "" {
-		input = Decrypt([]byte(out), key, nnonce)
-		output = []byte(out)
+		input = Decrypt(out, shift, size)
+		output = out
 	}
 
-	answer := &CryptoAnswer{}
+	crypto := &CryptoAnswer{}
 
-	keyString := string(key[:len(key)])
-	outputString := string(output[:len(output)])
-	decInputString := string(input[:len(input)])
+	crypto.Key = strconv.Itoa(shift)
+	crypto.Input = input
+	crypto.Output = output
 
-	answer.Key = keyString
-	answer.Input = string(in)
-	answer.Output = outputString
-	answer.DecryptedInput = decInputString
-
-	jsonAnsw, err := json.Marshal(answer)
+	json, err := json.Marshal(crypto)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal(err)
 	}
 
-	w.Write(jsonAnsw)
+	w.Write(json)
 }
