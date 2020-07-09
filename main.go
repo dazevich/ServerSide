@@ -10,6 +10,7 @@ import (
 
 func main() {
 
+	// Listen port
 	port := ":9097"
 	r := mux.NewRouter()
 	r.HandleFunc("/getCourses", api.APIServer)

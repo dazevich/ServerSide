@@ -12,6 +12,7 @@ type CryptoAnser struct {
 
 func GetCrypto(wr http.ResponseWriter, r *http.Request) {
 
+	// Test crypto
 	key := r.FormValue("key")
 	text := []byte(r.FormValue("text"))
 
