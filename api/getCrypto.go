@@ -1,10 +1,12 @@
 package api
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
+	"encoding/hex"
 	"encoding/json"
 	"log"
 	"net/http"
-	"strconv"
 )
 
 type CryptoAnswer struct {
@@ -13,80 +15,109 @@ type CryptoAnswer struct {
 	Output string
 }
 
-func Encrypt(text string, shift int, size int) string {
-	var encrypted string
-	var old_code, new_code int
-	for _, ch := range text {
-		old_code = int(ch)
-		new_code = old_code + shift
-		if ch >= 'a' && ch <= 'z' && new_code > int('z') ||
-			ch >= 'A' && ch <= 'Z' && new_code > int('Z') {
-			new_code -= size
-		}
-
-		encrypted += string(new_code)
-	}
-	return encrypted
-}
-
-func Decrypt(text string, shift int, size int) string {
-	var decrypted string
-	var old_code, new_code int
-	for _, ch := range text {
-		old_code = int(ch)
-		new_code = old_code - shift
-		if ch >= 'a' && ch <= 'z' && new_code < int('a') ||
-			ch >= 'A' && ch <= 'Z' && new_code < int('A') {
-			new_code += size
-		}
-
-		decrypted += string(new_code)
-	}
-	return decrypted
-}
-
 var (
 	input  string
 	output string
 )
+
+func GetKey(key string) ([]byte, error) {
+	userKey := []byte(key)
+	keyTmp := []byte("6368616e176520746869732070617373776f726420746f206120736563726574")
+	var newKey []byte
+	if len(userKey) < len(keyTmp) {
+		addTmp := make([]byte, len(keyTmp)-len(userKey))
+		copy(addTmp, keyTmp)
+		newKey = append(newKey, userKey...)
+		newKey = append(newKey, addTmp...)
+	}
+	if len(userKey) > len(keyTmp) {
+		addTmp := make([]byte, len(keyTmp))
+		copy(addTmp, userKey)
+		newKey = append(newKey, addTmp...)
+	}
+	result, err := hex.DecodeString(string(newKey))
+	if err != nil {
+		log.Fatal(err.Error())
+		return nil, err
+	}
+	return result, nil
+}
+
+func GetNonce() []byte {
+	result, _ := hex.DecodeString("64a9433eae7ccceee2fc0eda")
+	return result
+}
+
+func Encrypt(text string, key []byte, nonce []byte) []byte {
+	textByte := []byte(text)
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		panic(err.Error())
+	}
+	aesgcm, err := cipher.NewGCM(block)
+	if err != nil {
+		panic(err.Error())
+	}
+	ciphertext := aesgcm.Seal(nil, nonce, textByte, nil)
+	return ciphertext
+}
+
+func Decrypt(ciphertext []byte, key []byte, nonce []byte) []byte {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		panic(err.Error())
+	}
+	aesgcm, err := cipher.NewGCM(block)
+	if err != nil {
+		panic(err.Error())
+	}
+	plaintext, err := aesgcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		panic(err.Error())
+	}
+	return plaintext
+}
 
 func GetCrypto(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
-	shift, err := strconv.Atoi(r.FormValue("key"))
-	if err != nil {
-		log.Fatal(err)
-	}
+	userKey := r.FormValue("key")
 	in := r.FormValue("input")
 	out := r.FormValue("output")
 
-	size := 33
-	if shift > size {
-		log.Fatalf("Cannot be more then %d", shift)
+	if userKey == "" {
+		userKey = "edeef0"
 	}
 
-	if out == "" && in != "" {
-		output = Encrypt(in, shift, size)
-		input = in
+	key, err := GetKey(userKey)
+	if err != nil {
+		log.Fatal(err.Error())
 	}
+	nonce := GetNonce()
 
-	if out != "" && in == "" {
-		input = Decrypt(out, shift, size)
+	if in == "" && out != "" {
+		decodedStr, err := hex.DecodeString(out)
+		if err != nil {
+			log.Fatal(err)
+		}
+		input = string(Decrypt(decodedStr, key, nonce))
 		output = out
 	}
 
-	crypto := &CryptoAnswer{}
-
-	crypto.Key = strconv.Itoa(shift)
-	crypto.Input = input
-	crypto.Output = output
-
-	json, err := json.Marshal(crypto)
-	if err != nil {
-		log.Fatal(err)
+	if in != "" && out == "" {
+		output = hex.EncodeToString(Encrypt(in, key, nonce))
+		input = in
 	}
 
+	answer := &CryptoAnswer{}
+	answer.Key = userKey
+	answer.Input = input
+	answer.Output = output
+
+	json, _ := json.Marshal(answer)
+
 	w.Write(json)
+
 }
