@@ -6,7 +6,7 @@
 localhost:9097/getCourses
 
 # GET для крипты: 
-localhost:9097/getCrypto?key=edeef0&input=SomeText \n
+localhost:9097/getCrypto?key=edeef0&input=SomeText
 
 # Курсы
 Для вывода курсов нужно запустить main.go из ClientApp и перейти по адресу localhost:8080/courses
